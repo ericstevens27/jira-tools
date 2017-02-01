@@ -1,39 +1,71 @@
-# This script shows how to use the client in anonymous mode
-# against jira.atlassian.com.
+# This program accesses the Graphite version of jira and extracts all of the field names for issues
+# It is used to find the jira name for specific fields - such as custom fields - for use in other programs
+
+import getopt, sys
 from jira import JIRA
 user = 'eric.stevens'
 password = 'blueCOUGARecho'
+jira_server = 'https://graphitesoftware.atlassian.net'
 
-# By default, the client will connect to a JIRA instance started from the Atlassian Plugin SDK
-# (see https://developer.atlassian.com/display/DOCS/Installing+the+Atlassian+Plugin+SDK for details).
-# Override this with the options parameter.
+def usage():
+    usageMsg = "This program uses the JIRA Rest API to access and extract issue field names from Jira.\n\
+    Usage is:\n\
+    python "+sys.argv[0]+" --issue=<string> [options] where options can be:\n\
+    \t--issue=<string>: use this issue key (REQUIRED)\n\
+    \t--field=<string>: the field description to find.\n\
+    \nIf no field description is provided then all fields will be listed.\n\
+    If the field has spaces then the string must be enclosed in quotes\n\
+    \n\
+    \t--help: print this message\n\
+    \t--verbose: print messages\n\
+    \t--debug: print debug messages\n\
+    \n"
+    print (usageMsg)
 
-jira = JIRA(server='https://graphitesoftware.atlassian.net', basic_auth=(user, password))
+try:
+    opts, args = getopt.getopt(sys.argv[1:], "", ["help", "verbose", "debug", "issue=", "field="])
+except getopt.GetoptError as err:
+    # print help information and exit:
+    print(err) # will print something like "option -a not recognized"
+    usage()
+    sys.exit(2)
+issueToUse = None
+fieldToFind = None
+verbose = False
+debug = False
+for o, a in opts:
+    if o in ("--help"):
+        usage()
+        sys.exit()
+    elif o in ("--verbose"):
+        verbose = True
+    elif o in ("--issue"):
+        issueToUse = a
+    elif o in ("--field"):
+        fieldToFind = a
+    elif o in ("--debug"):
+        debug = True
+    else:
+        print ("[ERROR] unknown option {}".format(o))
+        usage()
+        sys.exit(2)
 
-proj_to_find = "TPPI"
-jql_string = 'project='+proj_to_find+' and assignee=currentUser() ORDER BY key'
+if issueToUse is None:
+    print ("[ERROR] issue is required")
+    usage()
+    sys.exit(2)
 
-# get all issues in project assigned to this user
-# all_proj_issues_but_mine = jira.search_issues(jql_string)
-# print ("Issue list, assigned to {}".format(user))
-# for i in all_proj_issues_but_mine:
-#     print (i)
+jira = JIRA(server=jira_server, basic_auth=(user, password))
 
 # Fetch all fields
 allfields=jira.fields()
 # Make a map from field name -> field id
 nameMap = {field['name']:field['id'] for field in allfields}
 # Fetch an issue
-issue = jira.issue('TPPI-10')
+issue = jira.issue(issueToUse)
 # You can now look up custom fields by name using the map
-print (issue.fields, nameMap["Resolution"])
-print (issue.fields, nameMap["Description"])
-print (issue.raw['fields'][nameMap["Description"]])
-
-transitions = jira.transitions(issue)
-for t in transitions:
-    print (t['id'], t['name'])
-
-# Resolve the issue and assign it to 'pm_user' in one step
-jira.transition_issue(issue, 51)
-jira.transition_issue(issue, 31)
+if fieldToFind is None:
+    for field in allfields:
+        print ("{} -> {}".format(field['name'],field['id']))
+else:
+    print ("{} -> {}".format(fieldToFind,nameMap[fieldToFind]))
