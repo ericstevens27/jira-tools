@@ -1,0 +1,3 @@
+ApplyToType,Summary,Description
+Bug,"Create and Run Unit Tests","All new features require unit tests"
+Bug,"Run all Functional Tests","Run all existing functional tests. If functional tests are not available then they must be created and run. Manual tests following an approved test plan are accetable. Functional tests must included a documented test report"
