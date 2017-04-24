@@ -3,7 +3,7 @@ from jira import JIRA
 user = 'commander.data'
 password = 'Gr1000D1000a_76'
 jira_server = 'https://graphitesoftware.atlassian.net'
-defaultQuery = 'project = SER AND Sprint = 44 ORDER BY assignee DESC, key DESC'
+defaultQuery = 'project = SER AND Sprint in openSprints() and issuetype in (Story, Bug, Task) ORDER BY assignee DESC, key DESC'
 
 def usage():
     usageMsg = "This program uses the JIRA Rest API to access and extract issue and version data from Jira.\n\
@@ -23,10 +23,11 @@ def usage():
     \t--format=<string>: select the format of the output. Valid choices are: csv, html, txt. (default is csv) Note: NOT IMPLEMENTED YET\n\
     \t--version=<string>: use this version identifier (default is all versions in the selected project)\n\
     \t--type=<string>: only items will be of this issue type (default is all types)\n\
+    \t--sprint=#: use this sprint number for the query\n\
     \n\
     This program will create a file based on the format selected that contains the issue information for the selected project OR query.\n\
     You must specify the project key to use (--project) or select the --useQuery option. The pre-defined query is: \n\
-    \tproject = SER AND Sprint = 44 ORDER BY assignee DESC, key DESC\n\
+    \tproject = SER AND Sprint in openSprints() and issuetype in (Story, Bug, Task) ORDER BY assignee DESC, key DESC\n\
     The information extracted is:\n\
     \t* Type\n\
     \t* Key\n\
@@ -41,7 +42,7 @@ def usage():
     print (usageMsg)
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:], "", ["help", "verbose", "debug", "output=", "project=", "version=", "format=", "type=", "dryrun", "useQuery"])
+    opts, args = getopt.getopt(sys.argv[1:], "", ["help", "verbose", "debug", "output=", "project=", "version=", "format=", "type=", "dryrun", "useQuery", "sprint="])
 except getopt.GetoptError as err:
     # print help information and exit:
     print(err) # will print something like "option -a not recognized"
@@ -56,6 +57,7 @@ verbose = False
 debug = False
 dryrun = False
 useQuery = False
+sprintNumber = 0
 for o, a in opts:
     if o in ("--help"):
         usage()
@@ -74,6 +76,8 @@ for o, a in opts:
         version = a
     elif o in ("--type"):
         issuetype = a
+    elif o in ("--sprint"):
+        sprintNumber = int(a)
     elif o in ("--debug"):
         debug = True
         verbose = True
@@ -109,8 +113,15 @@ if verbose:
             print ('Issue Type: All')
         else:
             print ('Issue Type: {}'.format(issuetype))
+        if sprintNumber == 0:
+            print ('Sprint: All')
+        else:
+            print ('sprint Number: {}'.format(sprintNumber))
 
+# setup stuff you need
 jira = JIRA(server=jira_server, basic_auth=(user, password))
+assigneePoints = {}
+totalPoints = 0
 
 if useQuery:
     jql_string = defaultQuery
@@ -120,6 +131,8 @@ else:
         jql_string = jql_string+' and fixVersion="'+version+'"'
     if issuetype is not None:
         jql_string = jql_string+' and issuetype='+issuetype
+    if sprintNumber != 0:
+        jql_string = jql_string + ' and sprint=' + str(sprintNumber)
     jql_string = jql_string+' ORDER BY key'
 
 # NOTE: after this point jql_string is the only query instructions used
@@ -134,11 +147,18 @@ allfields=jira.fields()
 nameMap = {field['name']:field['id'] for field in allfields}
 
 # get all issues in project as per jql string
-issue_list = jira.search_issues(jql_string, maxResults=False)
+issue_list = jira.search_issues(jql_string, maxResults=1000)
 if verbose:
     print ("Creating {} records in output file {}, as per [{}]".format(issue_list.total, output, jql_string))
-FH.write ('"Type","Key","Epic","Status","Summary","Project","Version","Story Points","Assignee"'+"\n")
+    if issue_list.total > 1000:
+        print ('[WARNING] total issues returned is over maximu limit of 1000. Only 1000 issues will be processed.')
+FH.write ('"Type","Key","Epic","Status","Summary","Project","Story Points","Assignee"'+"\n")
+if debug:
+    recCount = 0
 for i in issue_list:
+    if debug:
+        recCount = recCount + 1
+        print ('[DEBUG] Processing key [{}]: {}'.format(recCount, i))
     if i.fields.issuetype == "Epic":
         epic_link = None
     else:
@@ -146,17 +166,25 @@ for i in issue_list:
             epic_link = i.raw['fields'][nameMap["Epic Link"]]
         except:
             epic_link = None
-    for j in i.fields.fixVersions:
-        v = jira.version(j.id)
-        try:
-            relDate = v.releaseDate
-        except:
-            relDate = None
-        try:
-            sDate = v.startDate
-        except:
-            sDate = None
-        FH.write ('"{}","{}","{}","{}","{}","{}","{}","{}","{}"'.format(i.fields.issuetype, i, epic_link, i.fields.status, i.fields.summary, project, v.name, i.fields.customfield_10901, i.fields.assignee)+"\n")
+    FH.write ('"{}","{}","{}","{}","{}","{}","{}","{}"'.format(i.fields.issuetype, i, epic_link, i.fields.status, i.fields.summary, project, i.fields.customfield_10901, i.fields.assignee)+"\n")
+    # count assignee points
+    if i.fields.customfield_10901 != None:
+        totalPoints = totalPoints + i.fields.customfield_10901
+    if i.fields.assignee in assigneePoints:
+        if i.fields.customfield_10901 == None:
+            assigneePoints[i.fields.assignee] = 0
+        else:
+            assigneePoints[i.fields.assignee] = assigneePoints[i.fields.assignee] + i.fields.customfield_10901
+    else:
+        if i.fields.customfield_10901 == None:
+            assigneePoints[i.fields.assignee] = 0
+        else:
+            assigneePoints[i.fields.assignee] = i.fields.customfield_10901
+
+# all done - let's rpint out the assignee list with points
+print ('Total points assigned to the sprint: {}'.format(totalPoints))
+for k, v in assigneePoints.items():
+    print('Assignee: {}: Points: {}'.format(k, v))
 
 FH.close()
 sys.exit()
