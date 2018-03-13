@@ -1,7 +1,7 @@
 import getopt, sys
 from jira import JIRA
 user = 'commander.data'
-password = 'Gr1000D1000a_76'
+
 jira_server = 'https://graphitesoftware.atlassian.net'
 defaultQuery = 'project = SER AND Sprint in openSprints() and issuetype in (Story, Bug, Task) ORDER BY assignee DESC, key DESC'
 
