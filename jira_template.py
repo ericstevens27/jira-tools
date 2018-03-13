@@ -3,7 +3,6 @@ from jira import JIRA
 import csv
 
 user = 'commander.data'
-password = 'Gr1000D1000a_76'
 jira_server = 'https://graphitesoftware.atlassian.net'
 
 listSubTask = []
