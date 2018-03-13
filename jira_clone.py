@@ -3,7 +3,7 @@ from jira import JIRA
 import csv
 
 user = 'eric.stevens'
-password = 'blueCOUGARecho'
+
 jira_server = 'https://graphitesoftware.atlassian.net'
 
 
