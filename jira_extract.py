@@ -1,7 +1,7 @@
 import getopt, sys
 from jira import JIRA
 user = 'eric.stevens'
-password = 'blueCOUGARecho'
+
 jira_server = 'https://graphitesoftware.atlassian.net'
 
 def usage():
